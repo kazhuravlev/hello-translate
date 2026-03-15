@@ -27,10 +27,10 @@ jobs:
 
       - name: Read extension version
         id: version
-        run: echo "version=$(node -p 'require(\"./manifest.json\").version')" >> "$GITHUB_OUTPUT"
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Package extension
-        run: task package
+        run: task package-release RELEASE_VERSION="${{ steps.version.outputs.version }}"
 
       - name: Write release notes
         run: |

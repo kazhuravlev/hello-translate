@@ -4,6 +4,7 @@ vars:
   EXT_NAME: hello-translate
   VERSION:
     sh: node -p "require('./manifest.json').version"
+  RELEASE_VERSION: '{{default "" .RELEASE_VERSION}}'
   DIST_DIR: dist
   PACKAGE_FILE: "{{.DIST_DIR}}/{{.EXT_NAME}}-{{.VERSION}}.zip"
   EXTENSION_ID: '{{default "" .CHROME_EXTENSION_ID}}'
@@ -29,6 +30,21 @@ tasks:
     cmds:
       - rm -rf {{.DIST_DIR}}
 
+  set-version:
+    desc: Rewrite manifest.json version for a tagged release
+    preconditions:
+      - sh: test -n "{{.RELEASE_VERSION}}"
+        msg: Set RELEASE_VERSION, for example RELEASE_VERSION=0.3.1.
+      - sh: printf "%s" "{{.RELEASE_VERSION}}" | grep -Eq '^[0-9]+(\.[0-9]+){1,3}$'
+        msg: RELEASE_VERSION must be a Chrome-compatible dotted numeric version.
+    cmds:
+      - >
+        node -e "const fs=require('fs');
+        const path='manifest.json';
+        const manifest=JSON.parse(fs.readFileSync(path,'utf8'));
+        manifest.version='{{.RELEASE_VERSION}}';
+        fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');"
+
   package:
     desc: Build a Chrome Web Store upload zip
     deps: [validate]
@@ -36,6 +52,14 @@ tasks:
       - mkdir -p {{.DIST_DIR}}
       - rm -f {{.PACKAGE_FILE}}
       - zip -r {{.PACKAGE_FILE}} manifest.json background.js content.js popup.html popup.css popup.js options.html options.css options.js icons
+
+  package-release:
+    desc: Rewrite manifest version from RELEASE_VERSION and build a release zip
+    cmds:
+      - task: set-version
+        vars:
+          RELEASE_VERSION: "{{.RELEASE_VERSION}}"
+      - task: package
 
   webstore-upload:
     desc: Upload the current package to the Chrome Web Store draft
