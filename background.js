@@ -120,24 +120,11 @@ async function handleTranslateCommand() {
   }
 
   try {
-    if (!isTranslatableTab(tab.url)) {
-      await storeTranslationRun({
-        sourceText: "",
-        results: [
-          {
-            provider: "extension",
-            ok: false,
-            error: "This page does not allow extension-based translation."
-          }
-        ]
-      });
-      return {
-        ok: false,
-        message: "This page cannot be translated by the extension."
-      };
-    }
-
-    const { selectedText } = await getSelectedTextFromTab(tab.id);
+    const {
+      selectedText,
+      pageTitle = "",
+      pageUrl = ""
+    } = await getSelectedTextFromTab(tab.id);
 
     if (!selectedText) {
       await storeTranslationRun({
@@ -174,8 +161,8 @@ async function handleTranslateCommand() {
     });
 
     await storeTranslationRun({
-      pageTitle: tab.title || "",
-      pageUrl: tab.url || "",
+      pageTitle,
+      pageUrl,
       sourceText: selectedText,
       targetLanguage,
       results
@@ -248,10 +235,6 @@ async function handleAutoTranslateSelection(message, sender) {
     ok: true,
     message: "Auto translate popup opened."
   };
-}
-
-function isTranslatableTab(url = "") {
-  return /^https?:\/\//.test(url);
 }
 
 async function translateWithGoogle({ apiKey, targetLanguage, text }) {

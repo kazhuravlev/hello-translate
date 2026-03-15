@@ -24,7 +24,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage"],
   "host_permissions": [
     "https://translation.googleapis.com/*",
     "https://api-free.deepl.com/*",
