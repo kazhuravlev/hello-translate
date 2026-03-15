@@ -8,7 +8,6 @@ const useDeeplInput = document.getElementById("use-deepl");
 const deeplApiKeyInput = document.getElementById("deepl-api-key");
 const clearHistoryButton = document.getElementById("clear-history");
 const historyList = document.getElementById("history-list");
-const saveButton = document.getElementById("save-settings");
 const status = document.getElementById("status");
 
 const providerLabels = {
@@ -41,10 +40,6 @@ async function loadSettings() {
   await loadHistory();
 }
 
-saveButton.addEventListener("click", async () => {
-  await persistSettings();
-});
-
 targetLanguageInput.addEventListener("change", async () => {
   await persistSettings({
     statusMessage: "Target language saved."
@@ -56,6 +51,34 @@ autoTranslateSelectionInput.addEventListener("change", async () => {
     statusMessage: autoTranslateSelectionInput.checked
       ? "Auto translate enabled."
       : "Auto translate disabled."
+  });
+});
+
+useGoogleInput.addEventListener("change", async () => {
+  await persistSettings({
+    statusMessage: useGoogleInput.checked
+      ? "Google provider enabled."
+      : "Google provider disabled."
+  });
+});
+
+useDeeplInput.addEventListener("change", async () => {
+  await persistSettings({
+    statusMessage: useDeeplInput.checked
+      ? "DeepL provider enabled."
+      : "DeepL provider disabled."
+  });
+});
+
+googleApiKeyInput.addEventListener("change", async () => {
+  await persistSettings({
+    statusMessage: "Google API key saved."
+  });
+});
+
+deeplApiKeyInput.addEventListener("change", async () => {
+  await persistSettings({
+    statusMessage: "DeepL API key saved."
   });
 });
 
