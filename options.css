@@ -247,6 +247,10 @@ button:hover {
   text-decoration: underline;
 }
 
+.attribution-separator {
+  margin: 0 8px;
+}
+
 .status {
   min-height: 24px;
   margin: 16px 0 0;
