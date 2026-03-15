@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hello Translate Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="settings">
+      <p class="eyebrow">Configuration</p>
+      <h1>Hello Translate</h1>
+      <p class="copy">
+        Configure the keyboard shortcut and choose the translation target
+        language.
+      </p>
+
+      <section class="panel">
+        <h2>Hotkey</h2>
+        <p class="copy">
+          Recommended on macOS: <strong>Command+Shift+9</strong>. It is fast to
+          press and is unlikely to conflict with common system shortcuts.
+        </p>
+        <p class="copy">
+          Chrome controls extension shortcuts. Open
+          <code>chrome://extensions/shortcuts</code> to change it later.
+        </p>
+        <label class="checkbox inline-toggle" for="auto-translate-selection">
+          <input
+            id="auto-translate-selection"
+            name="auto-translate-selection"
+            type="checkbox"
+          />
+          <span>Auto translate on mouse selection release</span>
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>Target language</h2>
+        <label class="field" for="target-language">
+          <span>Translate selected text into</span>
+          <select id="target-language" name="target-language">
+            <option value="en">English</option>
+            <option value="ru">Russian</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>Google provider</h2>
+        <label class="checkbox" for="use-google">
+          <input id="use-google" name="use-google" type="checkbox" />
+          <span>Use this svc</span>
+        </label>
+        <label class="field" for="google-api-key">
+          <span>Google Cloud Translation API key</span>
+          <input
+            id="google-api-key"
+            name="google-api-key"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Paste API key"
+          />
+        </label>
+        <p class="copy">
+          This starter uses Cloud Translation Basic v2 from your own Google
+          Cloud project.
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2>DeepL provider</h2>
+        <label class="checkbox" for="use-deepl">
+          <input id="use-deepl" name="use-deepl" type="checkbox" />
+          <span>Use this svc</span>
+        </label>
+        <label class="field" for="deepl-api-key">
+          <span>DeepL API key</span>
+          <input
+            id="deepl-api-key"
+            name="deepl-api-key"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Paste DeepL API key"
+          />
+        </label>
+        <p class="copy">
+          Direct API calls use DeepL v2. Free keys usually end with
+          <code>:fx</code> and use the free endpoint automatically.
+        </p>
+      </section>
+
+      <section class="panel history-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Translation history</h2>
+            <p class="copy">
+              Saved translations include source text, provider results, page
+              title, page URL, and timestamp.
+            </p>
+          </div>
+          <button id="clear-history" class="ghost-button" type="button">
+            Clear history
+          </button>
+        </div>
+        <div id="history-list" class="history-list">
+          <p class="history-empty">No translations saved yet.</p>
+        </div>
+      </section>
+
+      <footer class="attribution">
+        <a
+          href="https://www.flaticon.com/free-icons/translation"
+          title="translation icons"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Translation icons created by Freepik - Flaticon
+        </a>
+      </footer>
+
+      <button id="save-settings" type="button">Save settings</button>
+      <p id="status" class="status" aria-live="polite"></p>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>
