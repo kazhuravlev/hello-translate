@@ -1,0 +1,55 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Task
+        uses: arduino/setup-task@v2
+
+      - name: Read extension version
+        id: version
+        run: echo "version=$(node -p 'require(\"./manifest.json\").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Package extension
+        run: task package
+
+      - name: Write release notes
+        run: |
+          cat <<'EOF' > dist/release-notes.md
+          Hello Translate release ${{ steps.version.outputs.version }}
+
+          Assets:
+          - `hello-translate-${{ steps.version.outputs.version }}.zip`: packaged extension bundle
+
+          Note:
+          - Chrome users normally load this package by downloading it, extracting it, and using `chrome://extensions` -> `Load unpacked`.
+          - Publishing to the Chrome Web Store is a separate step.
+          EOF
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Hello Translate ${{ steps.version.outputs.version }}
+          body_path: dist/release-notes.md
+          files: |
+            dist/hello-translate-${{ steps.version.outputs.version }}.zip
+          generate_release_notes: true
