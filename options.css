@@ -44,6 +44,15 @@ h2 {
   line-height: 1.6;
 }
 
+.inline-link {
+  color: #9a3412;
+  text-decoration: none;
+}
+
+.inline-link:hover {
+  text-decoration: underline;
+}
+
 .panel {
   margin-top: 24px;
   padding: 20px;
