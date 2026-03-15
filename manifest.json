@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Hello Translate",
   "short_name": "HelloTranslate",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Translate selected text with keyboard shortcuts or auto-translate selection using Google Translate and DeepL.",
   "minimum_chrome_version": "114",
   "homepage_url": "https://github.com/kazhuravlev/hello-translate",
