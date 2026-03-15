@@ -53,3 +53,28 @@ jobs:
           files: |
             dist/hello-translate-${{ steps.version.outputs.version }}.zip
           generate_release_notes: true
+
+      - name: Authenticate to Google Cloud
+        id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.CHROME_WEBSTORE_SERVICE_ACCOUNT_JSON }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+
+      - name: Publish to Chrome Web Store
+        env:
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_WEBSTORE_TOKEN: ${{ steps.google-auth.outputs.access_token }}
+        run: |
+          if [ -z "$CHROME_PUBLISHER_ID" ]; then
+            echo "CHROME_PUBLISHER_ID secret is not set." >&2
+            exit 1
+          fi
+          if [ -z "$CHROME_EXTENSION_ID" ]; then
+            echo "CHROME_EXTENSION_ID secret is not set." >&2
+            exit 1
+          fi
+          task webstore-upload-existing
+          task webstore-publish

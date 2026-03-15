@@ -7,9 +7,9 @@ vars:
   RELEASE_VERSION: '{{default "" .RELEASE_VERSION}}'
   DIST_DIR: dist
   PACKAGE_FILE: "{{.DIST_DIR}}/{{.EXT_NAME}}-{{.VERSION}}.zip"
+  PUBLISHER_ID: '{{default "" .CHROME_PUBLISHER_ID}}'
   EXTENSION_ID: '{{default "" .CHROME_EXTENSION_ID}}'
   ACCESS_TOKEN: '{{default "" .CHROME_WEBSTORE_TOKEN}}'
-  PUBLISH_TARGET: '{{default "default" .CHROME_PUBLISH_TARGET}}'
 
 tasks:
   default:
@@ -65,6 +65,20 @@ tasks:
     desc: Upload the current package to the Chrome Web Store draft
     deps: [package]
     preconditions:
+      - sh: test -n "{{.PUBLISHER_ID}}"
+        msg: Set CHROME_PUBLISHER_ID to your Chrome Web Store publisher id.
+      - sh: test -n "{{.EXTENSION_ID}}"
+        msg: Set CHROME_EXTENSION_ID to your published extension id.
+      - sh: test -n "{{.ACCESS_TOKEN}}"
+        msg: Set CHROME_WEBSTORE_TOKEN to an OAuth or service account access token.
+    cmds:
+      - task: webstore-upload-existing
+
+  webstore-upload-existing:
+    desc: Upload an already packaged zip to the Chrome Web Store draft
+    preconditions:
+      - sh: test -n "{{.PUBLISHER_ID}}"
+        msg: Set CHROME_PUBLISHER_ID to your Chrome Web Store publisher id.
       - sh: test -n "{{.EXTENSION_ID}}"
         msg: Set CHROME_EXTENSION_ID to your published extension id.
       - sh: test -n "{{.ACCESS_TOKEN}}"
@@ -72,16 +86,17 @@ tasks:
     cmds:
       - >
         curl --fail-with-body
-        -X PUT
         -H "Authorization: Bearer {{.ACCESS_TOKEN}}"
-        -H "x-goog-api-version: 2"
         -H "Content-Type: application/zip"
+        -X POST
         --data-binary @{{.PACKAGE_FILE}}
-        "https://www.googleapis.com/upload/chromewebstore/v1.1/items/{{.EXTENSION_ID}}"
+        "https://chromewebstore.googleapis.com/upload/v2/publishers/{{.PUBLISHER_ID}}/items/{{.EXTENSION_ID}}:upload"
 
   webstore-publish:
     desc: Publish the uploaded draft to the Chrome Web Store
     preconditions:
+      - sh: test -n "{{.PUBLISHER_ID}}"
+        msg: Set CHROME_PUBLISHER_ID to your Chrome Web Store publisher id.
       - sh: test -n "{{.EXTENSION_ID}}"
         msg: Set CHROME_EXTENSION_ID to your published extension id.
       - sh: test -n "{{.ACCESS_TOKEN}}"
@@ -89,13 +104,22 @@ tasks:
     cmds:
       - >
         curl --fail-with-body
-        -X POST
         -H "Authorization: Bearer {{.ACCESS_TOKEN}}"
-        -H "x-goog-api-version: 2"
-        "https://www.googleapis.com/chromewebstore/v1.1/items/{{.EXTENSION_ID}}:publish?publishTarget={{.PUBLISH_TARGET}}"
+        -X POST
+        "https://chromewebstore.googleapis.com/v2/publishers/{{.PUBLISHER_ID}}/items/{{.EXTENSION_ID}}:publish"
 
   webstore-deploy:
     desc: Package, upload, and publish in one step
     cmds:
       - task: webstore-upload
+      - task: webstore-publish
+
+  webstore-deploy-release:
+    desc: Rewrite manifest version, package once, upload, and publish
+    cmds:
+      - task: set-version
+        vars:
+          RELEASE_VERSION: "{{.RELEASE_VERSION}}"
+      - task: package
+      - task: webstore-upload-existing
       - task: webstore-publish
