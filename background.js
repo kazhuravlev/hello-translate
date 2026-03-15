@@ -1,5 +1,6 @@
 const defaultSettings = {
-  targetLanguage: "en",
+  targetLanguage: "EN-US",
+  targetLanguageLabel: "English (American)",
   enabledProviders: ["google"],
   autoTranslateSelection: false
 };
@@ -8,12 +9,26 @@ const recentAutoSelections = new Map();
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(
-    ["targetLanguage", "enabledProviders", "autoTranslateSelection"],
-    ({ targetLanguage, enabledProviders, autoTranslateSelection }) => {
+    [
+      "targetLanguage",
+      "targetLanguageLabel",
+      "enabledProviders",
+      "autoTranslateSelection"
+    ],
+    ({
+      targetLanguage,
+      targetLanguageLabel,
+      enabledProviders,
+      autoTranslateSelection
+    }) => {
       const nextSettings = {};
 
       if (!targetLanguage) {
         nextSettings.targetLanguage = defaultSettings.targetLanguage;
+      }
+
+      if (!targetLanguageLabel) {
+        nextSettings.targetLanguageLabel = defaultSettings.targetLanguageLabel;
       }
 
       if (!Array.isArray(enabledProviders)) {
@@ -144,13 +159,14 @@ async function handleTranslateCommand() {
     }
 
     const {
-      targetLanguage = "en",
+      targetLanguage: storedTargetLanguage = "EN-US",
       enabledProviders = ["google"]
     } = await chrome.storage.sync.get(["targetLanguage", "enabledProviders"]);
     const { googleApiKey = "", deeplApiKey = "" } = await chrome.storage.local.get([
       "googleApiKey",
       "deeplApiKey"
     ]);
+    const targetLanguage = normalizeTargetLanguage(storedTargetLanguage);
 
     const results = await runEnabledProviders({
       enabledProviders,
@@ -275,7 +291,6 @@ async function translateWithDeepl({ apiKey, targetLanguage, text }) {
   const endpoint = apiKey.endsWith(":fx")
     ? "https://api-free.deepl.com/v2/translate"
     : "https://api.deepl.com/v2/translate";
-  const deeplTargetLanguage = targetLanguage === "ru" ? "RU" : "EN";
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -285,7 +300,7 @@ async function translateWithDeepl({ apiKey, targetLanguage, text }) {
     },
     body: JSON.stringify({
       text: [text],
-      target_lang: deeplTargetLanguage
+      target_lang: targetLanguage
     })
   });
 
@@ -416,4 +431,18 @@ async function getSelectedTextFromTab(tabId) {
         : noReceiver
     );
   }
+}
+
+function normalizeTargetLanguage(language) {
+  const normalized = String(language || "").trim().toUpperCase();
+
+  if (normalized === "EN") {
+    return "EN-US";
+  }
+
+  if (normalized === "RU") {
+    return "RU";
+  }
+
+  return normalized || "EN-US";
 }

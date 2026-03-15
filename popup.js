@@ -6,11 +6,6 @@ const providerStatus = document.getElementById("provider-status");
 const sourceText = document.getElementById("source-text");
 const results = document.getElementById("results");
 
-const languageLabels = {
-  en: "English",
-  ru: "Russian"
-};
-
 const providerLabels = {
   google: "Google",
   deepl: "DeepL",
@@ -19,11 +14,11 @@ const providerLabels = {
 
 async function loadSettings() {
   const {
-    targetLanguage: configuredLanguage = "en",
+    targetLanguageLabel = "English (American)",
     enabledProviders = ["google"],
     autoTranslateSelection = false
   } = await chrome.storage.sync.get([
-    "targetLanguage",
+    "targetLanguageLabel",
     "enabledProviders",
     "autoTranslateSelection"
   ]);
@@ -35,8 +30,7 @@ async function loadSettings() {
     ({ name }) => name === "_execute_action"
   );
 
-  targetLanguage.textContent =
-    (languageLabels[configuredLanguage] ?? languageLabels.en).toUpperCase();
+  targetLanguage.textContent = targetLanguageLabel.toUpperCase();
   providerStatus.textContent = enabledProviders.length
     ? enabledProviders.map((provider) => providerLabels[provider] || provider).join("+").toUpperCase()
     : "NONE";
@@ -56,7 +50,7 @@ autoTranslateToggle.addEventListener("change", async () => {
 });
 
 loadSettings().catch(() => {
-  targetLanguage.textContent = "ENGLISH";
+  targetLanguage.textContent = "ENGLISH (AMERICAN)";
   providerStatus.textContent = "UNAVAILABLE";
 });
 

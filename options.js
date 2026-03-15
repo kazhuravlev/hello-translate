@@ -10,6 +10,41 @@ const clearHistoryButton = document.getElementById("clear-history");
 const historyList = document.getElementById("history-list");
 const status = document.getElementById("status");
 
+const fallbackTargetLanguages = [
+  { language: "AR", name: "Arabic" },
+  { language: "BG", name: "Bulgarian" },
+  { language: "CS", name: "Czech" },
+  { language: "DA", name: "Danish" },
+  { language: "DE", name: "German" },
+  { language: "EL", name: "Greek" },
+  { language: "EN-GB", name: "English (British)" },
+  { language: "EN-US", name: "English (American)" },
+  { language: "ES", name: "Spanish" },
+  { language: "ET", name: "Estonian" },
+  { language: "FI", name: "Finnish" },
+  { language: "FR", name: "French" },
+  { language: "HU", name: "Hungarian" },
+  { language: "ID", name: "Indonesian" },
+  { language: "IT", name: "Italian" },
+  { language: "JA", name: "Japanese" },
+  { language: "KO", name: "Korean" },
+  { language: "LT", name: "Lithuanian" },
+  { language: "LV", name: "Latvian" },
+  { language: "NB", name: "Norwegian (Bokmal)" },
+  { language: "NL", name: "Dutch" },
+  { language: "PL", name: "Polish" },
+  { language: "PT-BR", name: "Portuguese (Brazilian)" },
+  { language: "PT-PT", name: "Portuguese (European)" },
+  { language: "RO", name: "Romanian" },
+  { language: "RU", name: "Russian" },
+  { language: "SK", name: "Slovak" },
+  { language: "SL", name: "Slovenian" },
+  { language: "SV", name: "Swedish" },
+  { language: "TR", name: "Turkish" },
+  { language: "UK", name: "Ukrainian" },
+  { language: "ZH", name: "Chinese (simplified)" }
+];
+
 const providerLabels = {
   google: "Google",
   deepl: "DeepL",
@@ -18,19 +53,26 @@ const providerLabels = {
 
 async function loadSettings() {
   const {
-    targetLanguage = "en",
+    targetLanguage: storedTargetLanguage = "EN-US",
     enabledProviders = ["google"],
-    autoTranslateSelection = false
+    autoTranslateSelection = false,
+    targetLanguageLabel = "English (American)"
   } = await chrome.storage.sync.get([
     "targetLanguage",
     "enabledProviders",
-    "autoTranslateSelection"
+    "autoTranslateSelection",
+    "targetLanguageLabel"
   ]);
   const { googleApiKey = "", deeplApiKey = "" } = await chrome.storage.local.get(
     ["googleApiKey", "deeplApiKey"]
   );
+  const targetLanguage = normalizeTargetLanguage(storedTargetLanguage);
 
-  targetLanguageInput.value = targetLanguage;
+  await loadTargetLanguageOptions({
+    deeplApiKey,
+    selectedLanguage: targetLanguage,
+    selectedLabel: targetLanguageLabel
+  });
   autoTranslateSelectionInput.checked = autoTranslateSelection;
   useGoogleInput.checked = enabledProviders.includes("google");
   googleApiKeyInput.value = googleApiKey;
@@ -77,6 +119,11 @@ googleApiKeyInput.addEventListener("change", async () => {
 });
 
 deeplApiKeyInput.addEventListener("change", async () => {
+  await loadTargetLanguageOptions({
+    deeplApiKey: deeplApiKeyInput.value.trim(),
+    selectedLanguage: targetLanguageInput.value,
+    selectedLabel: targetLanguageInput.selectedOptions[0]?.textContent || ""
+  });
   await persistSettings({
     statusMessage: "DeepL API key saved."
   });
@@ -84,7 +131,11 @@ deeplApiKeyInput.addEventListener("change", async () => {
 
 async function persistSettings({ statusMessage = "Settings saved." } = {}) {
   const enabledProviders = [];
-  const targetLanguage = targetLanguageInput.value || "en";
+  const targetLanguage = normalizeTargetLanguage(
+    targetLanguageInput.value || "EN-US"
+  );
+  const targetLanguageLabel =
+    targetLanguageInput.selectedOptions[0]?.textContent || targetLanguage;
 
   if (useGoogleInput.checked) {
     enabledProviders.push("google");
@@ -96,6 +147,7 @@ async function persistSettings({ statusMessage = "Settings saved." } = {}) {
 
   await chrome.storage.sync.set({
     targetLanguage,
+    targetLanguageLabel,
     enabledProviders,
     autoTranslateSelection: autoTranslateSelectionInput.checked
   });
@@ -208,4 +260,89 @@ function formatDate(timestamp) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(timestamp);
+}
+
+async function loadTargetLanguageOptions({
+  deeplApiKey,
+  selectedLanguage,
+  selectedLabel
+}) {
+  const languages = await fetchDeeplTargetLanguages(deeplApiKey).catch(() =>
+    fallbackTargetLanguages
+  );
+
+  targetLanguageInput.replaceChildren();
+
+  for (const { language, name } of mergeSelectedLanguage(
+    languages,
+    selectedLanguage,
+    selectedLabel
+  )) {
+    const option = document.createElement("option");
+
+    option.value = language;
+    option.textContent = name;
+    targetLanguageInput.append(option);
+  }
+
+  targetLanguageInput.value =
+    targetLanguageInput.querySelector(`option[value="${selectedLanguage}"]`)
+      ?.value || targetLanguageInput.options[0]?.value || "EN-US";
+}
+
+async function fetchDeeplTargetLanguages(apiKey) {
+  if (!apiKey) {
+    return fallbackTargetLanguages;
+  }
+
+  const endpoint = apiKey.endsWith(":fx")
+    ? "https://api-free.deepl.com/v2/languages?type=target"
+    : "https://api.deepl.com/v2/languages?type=target";
+  const response = await fetch(endpoint, {
+    headers: {
+      Authorization: `DeepL-Auth-Key ${apiKey}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not load DeepL target languages.");
+  }
+
+  const payload = await response.json();
+
+  return payload
+    .filter((item) => item?.language && item?.name)
+    .map(({ language, name }) => ({ language, name }));
+}
+
+function mergeSelectedLanguage(languages, selectedLanguage, selectedLabel) {
+  if (!selectedLanguage) {
+    return languages;
+  }
+
+  if (languages.some(({ language }) => language === selectedLanguage)) {
+    return languages;
+  }
+
+  return [
+    {
+      language: selectedLanguage,
+      name: selectedLabel || selectedLanguage
+    },
+    ...languages
+  ];
+}
+
+function normalizeTargetLanguage(language) {
+  const normalized = String(language || "").trim().toUpperCase();
+
+  if (normalized === "EN") {
+    return "EN-US";
+  }
+
+  if (normalized === "RU") {
+    return "RU";
+  }
+
+  return normalized || "EN-US";
 }
