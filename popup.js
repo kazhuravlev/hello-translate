@@ -1,12 +1,10 @@
 const openOptionsButton = document.getElementById("open-options");
-const translateNowButton = document.getElementById("translate-now");
 const autoTranslateToggle = document.getElementById("auto-translate-toggle");
 const shortcut = document.getElementById("shortcut");
 const targetLanguage = document.getElementById("target-language");
 const providerStatus = document.getElementById("provider-status");
 const sourceText = document.getElementById("source-text");
 const results = document.getElementById("results");
-const statusChip = document.getElementById("status-chip");
 
 const languageLabels = {
   en: "English",
@@ -38,10 +36,10 @@ async function loadSettings() {
   );
 
   targetLanguage.textContent =
-    `LANG:${(languageLabels[configuredLanguage] ?? languageLabels.en).toUpperCase()}`;
+    (languageLabels[configuredLanguage] ?? languageLabels.en).toUpperCase();
   providerStatus.textContent = enabledProviders.length
-    ? `SVC:${enabledProviders.map((provider) => providerLabels[provider] || provider).join("+").toUpperCase()}`
-    : "SVC:NONE";
+    ? enabledProviders.map((provider) => providerLabels[provider] || provider).join("+").toUpperCase()
+    : "NONE";
   shortcut.textContent = `KEY:${translateCommand?.shortcut || "Command+Shift+9"}`;
   autoTranslateToggle.checked = autoTranslateSelection;
   renderLastTranslation(lastTranslationRun);
@@ -49,36 +47,28 @@ async function loadSettings() {
 
 openOptionsButton.addEventListener("click", async () => {
   await chrome.runtime.openOptionsPage();
-  setMode("CFG");
-});
-
-translateNowButton.addEventListener("click", async () => {
-  await runTranslation();
 });
 
 autoTranslateToggle.addEventListener("change", async () => {
   await chrome.storage.sync.set({
     autoTranslateSelection: autoTranslateToggle.checked
   });
-
-  setMode(autoTranslateToggle.checked ? "AUTO" : "MAN");
 });
 
 loadSettings().catch(() => {
-  targetLanguage.textContent = "LANG:ENGLISH";
-  providerStatus.textContent = "SVC:ERR";
-  setMode("ERR");
+  targetLanguage.textContent = "ENGLISH";
+  providerStatus.textContent = "UNAVAILABLE";
 });
 
 runTranslation().catch(() => {
-  setMode("ERR");
+  providerStatus.textContent = "UNAVAILABLE";
 });
 
 function renderLastTranslation(lastTranslationRun) {
   results.replaceChildren();
 
   if (!lastTranslationRun) {
-    sourceText.textContent = "Select text and run translation.";
+    sourceText.textContent = "Select text to translate.";
     results.replaceChildren(renderEmptyResult("No translation yet."));
     return;
   }
@@ -108,23 +98,19 @@ function renderLastTranslation(lastTranslationRun) {
 }
 
 async function runTranslation() {
-  setMode("RUN");
-  translateNowButton.disabled = true;
-
   try {
     const response = await chrome.runtime.sendMessage({
       type: "RUN_TRANSLATION"
     });
 
     await loadSettings();
-    setMode(response?.ok ? "OK" : "ERR");
-  } finally {
-    translateNowButton.disabled = false;
+    if (!response?.ok) {
+      providerStatus.textContent = "UNAVAILABLE";
+    }
+  } catch (error) {
+    providerStatus.textContent = "UNAVAILABLE";
+    throw error;
   }
-}
-
-function setMode(mode) {
-  statusChip.textContent = mode;
 }
 
 function renderEmptyResult(text) {

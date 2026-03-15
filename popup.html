@@ -10,19 +10,12 @@
     <main class="popup">
       <section class="pane" aria-label="Selected text">
         <p class="pane-label">Selected</p>
-        <p class="pane-text" id="source-text">Select text and run translation.</p>
+        <p class="pane-text" id="source-text">Select text to translate.</p>
       </section>
       <section class="pane" aria-label="Translated text">
         <div id="results" class="results"></div>
       </section>
-      <div class="controls">
-        <button id="translate-now" type="button">Translate</button>
-        <button id="open-options" class="secondary-button" type="button">
-          Settings
-        </button>
-      </div>
       <p id="status-line" class="status-line" aria-live="polite">
-        <span class="status-chip" id="status-chip">READY</span>
         <label class="status-toggle" for="auto-translate-toggle">
           <input id="auto-translate-toggle" type="checkbox" />
           <span>auto</span>
@@ -30,6 +23,19 @@
         <span class="status-meta" id="shortcut">Command+Shift+9</span>
         <span class="status-meta" id="target-language">English</span>
         <span class="status-meta" id="provider-status">Google</span>
+        <button
+          id="open-options"
+          class="status-action"
+          type="button"
+          aria-label="Open settings"
+          title="Settings"
+        >
+          <img
+            class="status-action-icon"
+            src="assets/settings-sliders.svg"
+            alt=""
+          />
+        </button>
       </p>
     </main>
     <script src="popup.js"></script>

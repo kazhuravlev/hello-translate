@@ -49,11 +49,6 @@ body {
   min-height: 34px;
 }
 
-.controls {
-  display: flex;
-  gap: 6px;
-}
-
 .result-card {
   padding: 6px 8px;
   border-radius: 10px;
@@ -129,17 +124,8 @@ button:hover {
   overflow: hidden;
 }
 
-.status-chip {
-  flex: 0 0 auto;
-  padding: 3px 6px;
-  border-radius: 999px;
-  background: #111827;
-  color: #f9fafb;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
 .status-meta {
+  flex: 0 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -158,4 +144,31 @@ button:hover {
   width: 12px;
   height: 12px;
   margin: 0;
+}
+
+.status-action {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.status-action:hover {
+  background: transparent;
+}
+
+.status-action-icon {
+  width: 14px;
+  height: 14px;
+  opacity: 0.82;
+}
+
+.status-action:hover .status-action-icon {
+  opacity: 1;
 }
