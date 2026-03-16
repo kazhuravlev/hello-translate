@@ -32,6 +32,13 @@ jobs:
       - name: Package extension
         run: task package-release RELEASE_VERSION="${{ steps.version.outputs.version }}"
 
+      - name: Resolve packaged artifact
+        id: artifact
+        run: |
+          package_file="dist/hello-translate-${{ steps.version.outputs.version }}.zip"
+          test -f "$package_file"
+          echo "package_file=$package_file" >> "$GITHUB_OUTPUT"
+
       - name: Write release notes
         run: |
           cat <<'EOF' > dist/release-notes.md
@@ -51,7 +58,7 @@ jobs:
           name: Hello Translate ${{ steps.version.outputs.version }}
           body_path: dist/release-notes.md
           files: |
-            dist/hello-translate-${{ steps.version.outputs.version }}.zip
+            ${{ steps.artifact.outputs.package_file }}
           generate_release_notes: true
 
       - name: Authenticate to Google Cloud
@@ -76,5 +83,5 @@ jobs:
             echo "CHROME_EXTENSION_ID secret is not set." >&2
             exit 1
           fi
-          task webstore-upload-existing
+          task webstore-upload-existing PACKAGE_FILE="${{ steps.artifact.outputs.package_file }}"
           task webstore-publish

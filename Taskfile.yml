@@ -83,6 +83,8 @@ tasks:
         msg: Set CHROME_EXTENSION_ID to your published extension id.
       - sh: test -n "{{.ACCESS_TOKEN}}"
         msg: Set CHROME_WEBSTORE_TOKEN to an OAuth or service account access token.
+      - sh: test -f "{{.PACKAGE_FILE}}"
+        msg: Package file {{.PACKAGE_FILE}} does not exist.
     cmds:
       - >
         curl --fail-with-body
