@@ -35,8 +35,12 @@ jobs:
       - name: Resolve packaged artifact
         id: artifact
         run: |
-          package_file="dist/hello-translate-${{ steps.version.outputs.version }}.zip"
-          test -f "$package_file"
+          package_file="$(find dist -maxdepth 1 -type f -name 'hello-translate-*.zip' | sort | tail -n 1)"
+          if [ -z "$package_file" ]; then
+            echo "No packaged extension zip found in dist/." >&2
+            ls -la dist >&2 || true
+            exit 1
+          fi
           echo "package_file=$package_file" >> "$GITHUB_OUTPUT"
 
       - name: Write release notes
