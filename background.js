@@ -137,6 +137,8 @@ async function handleTranslateCommand() {
   try {
     const {
       selectedText,
+      contextText = "",
+      pageLanguage = "",
       pageTitle = "",
       pageUrl = ""
     } = await getSelectedTextFromTab(tab.id);
@@ -172,6 +174,11 @@ async function handleTranslateCommand() {
       enabledProviders,
       targetLanguage,
       text: selectedText,
+      contextText: buildTranslationContext({
+        pageTitle,
+        contextText
+      }),
+      sourceLanguageHint: normalizeSourceLanguageHint(pageLanguage),
       googleApiKey,
       deeplApiKey
     });
@@ -287,10 +294,28 @@ async function translateWithGoogle({ apiKey, targetLanguage, text }) {
   return translated;
 }
 
-async function translateWithDeepl({ apiKey, targetLanguage, text }) {
+async function translateWithDeepl({
+  apiKey,
+  targetLanguage,
+  text,
+  contextText,
+  sourceLanguageHint
+}) {
   const endpoint = apiKey.endsWith(":fx")
     ? "https://api-free.deepl.com/v2/translate"
     : "https://api.deepl.com/v2/translate";
+  const body = {
+    text: [text],
+    target_lang: targetLanguage
+  };
+
+  if (contextText) {
+    body.context = contextText;
+  }
+
+  if (sourceLanguageHint) {
+    body.source_lang = sourceLanguageHint;
+  }
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -298,10 +323,7 @@ async function translateWithDeepl({ apiKey, targetLanguage, text }) {
       "Content-Type": "application/json",
       Authorization: `DeepL-Auth-Key ${apiKey}`
     },
-    body: JSON.stringify({
-      text: [text],
-      target_lang: targetLanguage
-    })
+    body: JSON.stringify(body)
   });
 
   const payload = await response.json().catch(() => ({}));
@@ -327,6 +349,8 @@ async function runEnabledProviders({
   enabledProviders,
   targetLanguage,
   text,
+  contextText,
+  sourceLanguageHint,
   googleApiKey,
   deeplApiKey
 }) {
@@ -370,7 +394,9 @@ async function runEnabledProviders({
         const translated = await translateWithDeepl({
           apiKey: deeplApiKey,
           targetLanguage,
-          text
+          text,
+          contextText,
+          sourceLanguageHint
         });
 
         return {
@@ -445,4 +471,46 @@ function normalizeTargetLanguage(language) {
   }
 
   return normalized || "EN-US";
+}
+
+function buildTranslationContext({ pageTitle, contextText }) {
+  const normalizedContext = normalizeContextText(contextText);
+  const contextParts = [];
+
+  if (pageTitle) {
+    contextParts.push(`Page title: ${normalizeContextText(pageTitle)}`);
+  }
+
+  if (normalizedContext) {
+    contextParts.push(`Surrounding text: ${normalizedContext}`);
+  }
+
+  const combined = contextParts.join("\n");
+
+  if (!combined) {
+    return "";
+  }
+
+  return trimContextText(combined);
+}
+
+function normalizeContextText(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function trimContextText(text) {
+  return text.slice(0, 800);
+}
+
+function normalizeSourceLanguageHint(language) {
+  const normalized = String(language || "")
+    .trim()
+    .replace(/_/g, "-")
+    .toUpperCase();
+
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.split("-")[0];
 }
