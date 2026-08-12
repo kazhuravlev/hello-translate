@@ -49,14 +49,23 @@ autoTranslateToggle.addEventListener("change", async () => {
   });
 });
 
-loadSettings().catch(() => {
+initializePopup().catch(() => {
   targetLanguage.textContent = "ENGLISH (AMERICAN)";
   providerStatus.textContent = "UNAVAILABLE";
 });
 
-runTranslation().catch(() => {
-  providerStatus.textContent = "UNAVAILABLE";
-});
+async function initializePopup() {
+  const { intent = "default" } = await chrome.runtime.sendMessage({
+    type: "CONSUME_POPUP_INTENT"
+  });
+
+  if (intent === "field-translation") {
+    await loadSettings();
+    return;
+  }
+
+  await runTranslation();
+}
 
 function renderLastTranslation(lastTranslationRun) {
   results.replaceChildren();

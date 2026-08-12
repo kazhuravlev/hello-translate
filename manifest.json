@@ -43,6 +43,13 @@
         "default": "Ctrl+Shift+9",
         "mac": "Command+Shift+9"
       }
+    },
+    "translate_focused_field": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+8",
+        "mac": "Command+Shift+8"
+      },
+      "description": "Translate the focused text field and replace its value"
     }
   }
 }

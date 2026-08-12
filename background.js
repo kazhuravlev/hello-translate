@@ -6,6 +6,17 @@ const defaultSettings = {
 };
 const MAX_HISTORY_ITEMS = 100;
 const recentAutoSelections = new Map();
+let pendingFieldTranslationPopup = false;
+
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== "translate_focused_field") {
+    return;
+  }
+
+  handleTranslateFocusedFieldCommand().catch((error) => {
+    console.error("Could not translate the focused text field.", error);
+  });
+});
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(
@@ -68,6 +79,15 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "CONSUME_POPUP_INTENT") {
+    const intent = pendingFieldTranslationPopup
+      ? "field-translation"
+      : "default";
+    pendingFieldTranslationPopup = false;
+    sendResponse({ intent });
+    return;
+  }
+
   if (message?.type === "RUN_TRANSLATION") {
     handleTranslateCommand()
       .then((result) => {
@@ -120,6 +140,116 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 });
+
+async function handleTranslateFocusedFieldCommand() {
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true
+  });
+  const windowId = tab?.windowId;
+
+  if (!tab?.id) {
+    await storeFieldTranslationError("No active tab found.");
+    await openFieldTranslationPopup(windowId);
+    return;
+  }
+
+  try {
+    const field = await sendMessageToTab(tab.id, {
+      type: "GET_FOCUSED_TEXT_FIELD"
+    });
+
+    if (!field?.ok) {
+      throw new Error(field?.message || "Focus an editable text field first.");
+    }
+
+    const {
+      targetLanguage: storedTargetLanguage = "EN-US",
+      enabledProviders = ["google"]
+    } = await chrome.storage.sync.get(["targetLanguage", "enabledProviders"]);
+    const { googleApiKey = "", deeplApiKey = "" } = await chrome.storage.local.get([
+      "googleApiKey",
+      "deeplApiKey"
+    ]);
+    const targetLanguage = normalizeTargetLanguage(storedTargetLanguage);
+    const results = await runEnabledProviders({
+      enabledProviders,
+      targetLanguage,
+      text: field.value,
+      contextText: buildTranslationContext({
+        pageTitle: field.pageTitle,
+        contextText: field.contextText
+      }),
+      sourceLanguageHint: normalizeSourceLanguageHint(field.pageLanguage),
+      googleApiKey,
+      deeplApiKey
+    });
+    const successfulResult = results.find((result) => result.ok);
+
+    if (!successfulResult) {
+      await storeTranslationRun({
+        mode: "field",
+        pageTitle: field.pageTitle,
+        pageUrl: field.pageUrl,
+        sourceText: field.value,
+        targetLanguage,
+        results
+      });
+      await openFieldTranslationPopup(windowId);
+      return;
+    }
+
+    const replacement = await sendMessageToTab(tab.id, {
+      type: "REPLACE_FOCUSED_TEXT_FIELD",
+      fieldToken: field.fieldToken,
+      translatedText: successfulResult.translatedText
+    });
+
+    if (!replacement?.ok) {
+      results.push({
+        provider: "extension",
+        ok: false,
+        error: replacement?.message || "Could not update the focused text field."
+      });
+    }
+
+    await storeTranslationRun({
+      mode: "field",
+      pageTitle: field.pageTitle,
+      pageUrl: field.pageUrl,
+      sourceText: field.value,
+      targetLanguage,
+      results
+    });
+  } catch (error) {
+    await storeFieldTranslationError(error.message || "Field translation failed.");
+  }
+
+  await openFieldTranslationPopup(windowId);
+}
+
+async function storeFieldTranslationError(message) {
+  await storeTranslationRun({
+    mode: "field",
+    sourceText: "",
+    results: [{ provider: "extension", ok: false, error: message }]
+  });
+}
+
+async function openFieldTranslationPopup(windowId) {
+  pendingFieldTranslationPopup = true;
+
+  try {
+    if (typeof windowId === "number") {
+      await chrome.action.openPopup({ windowId });
+    } else {
+      await chrome.action.openPopup();
+    }
+  } catch (error) {
+    pendingFieldTranslationPopup = false;
+    console.warn("Could not open the translation popup.", error);
+  }
+}
 
 async function handleTranslateCommand() {
   const [tab] = await chrome.tabs.query({
@@ -441,10 +571,14 @@ async function storeTranslationRun(lastTranslationRun) {
 }
 
 async function getSelectedTextFromTab(tabId) {
+  return sendMessageToTab(tabId, {
+    type: "GET_SELECTION_TEXT"
+  });
+}
+
+async function sendMessageToTab(tabId, message) {
   try {
-    return await chrome.tabs.sendMessage(tabId, {
-      type: "GET_SELECTION_TEXT"
-    });
+    return await chrome.tabs.sendMessage(tabId, message);
   } catch (error) {
     const noReceiver =
       chrome.runtime.lastError?.message ||
