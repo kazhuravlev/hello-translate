@@ -5,6 +5,10 @@ const defaultSettings = {
   autoTranslateSelection: false
 };
 const MAX_HISTORY_ITEMS = 100;
+const TRANSLATION_CACHE_STORAGE_KEY = "translationCache";
+const PAGE_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const GLOBAL_TRANSLATION_CACHE_TTL_MS = 10 * 60 * 1000;
+const MAX_TRANSLATION_CACHE_ITEMS = 500;
 const recentAutoSelections = new Map();
 let pendingFieldTranslationPopup = false;
 
@@ -172,10 +176,11 @@ async function handleTranslateFocusedFieldCommand() {
       "deeplApiKey"
     ]);
     const targetLanguage = normalizeTargetLanguage(storedTargetLanguage);
-    const results = await runEnabledProviders({
+    const results = await runEnabledProvidersWithCache({
       enabledProviders,
       targetLanguage,
       text: field.value,
+      pageUrl: field.pageUrl,
       contextText: buildTranslationContext({
         pageTitle: field.pageTitle,
         contextText: field.contextText
@@ -300,10 +305,11 @@ async function handleTranslateCommand() {
     ]);
     const targetLanguage = normalizeTargetLanguage(storedTargetLanguage);
 
-    const results = await runEnabledProviders({
+    const results = await runEnabledProvidersWithCache({
       enabledProviders,
       targetLanguage,
       text: selectedText,
+      pageUrl,
       contextText: buildTranslationContext({
         pageTitle,
         contextText
@@ -549,6 +555,140 @@ async function runEnabledProviders({
   });
 
   return Promise.all(tasks);
+}
+
+async function runEnabledProvidersWithCache(options) {
+  const sourceLanguage = normalizeCacheLanguage(
+    options.sourceLanguageHint || "AUTO"
+  );
+  const targetLanguage = normalizeCacheLanguage(options.targetLanguage);
+  const cachedResults = await getCachedTranslation({
+    pageUrl: options.pageUrl,
+    sourceLanguage,
+    targetLanguage,
+    sourceText: options.text
+  });
+
+  if (cachedResults) {
+    return cachedResults;
+  }
+
+  const results = await runEnabledProviders(options);
+
+  if (results.length && results.every((result) => result.ok)) {
+    await storeCachedTranslation({
+      pageUrl: options.pageUrl,
+      sourceLanguage,
+      targetLanguage,
+      sourceText: options.text,
+      results
+    });
+  }
+
+  return results;
+}
+
+async function getCachedTranslation({
+  pageUrl,
+  sourceLanguage,
+  targetLanguage,
+  sourceText
+}) {
+  const now = Date.now();
+  const cache = await readTranslationCache();
+  const pageKey = buildTranslationCacheKey({
+    pageUrl,
+    sourceLanguage,
+    targetLanguage,
+    sourceText
+  });
+  const globalKey = buildTranslationCacheKey({
+    sourceLanguage,
+    targetLanguage,
+    sourceText
+  });
+  const entry = [pageKey, globalKey]
+    .map((key) => cache[key])
+    .find((candidate) => candidate?.expiresAt > now);
+
+  if (!entry) {
+    return null;
+  }
+
+  return structuredClone(entry.results);
+}
+
+async function storeCachedTranslation({
+  pageUrl,
+  sourceLanguage,
+  targetLanguage,
+  sourceText,
+  results
+}) {
+  const now = Date.now();
+  const cache = await readTranslationCache();
+  const liveEntries = Object.entries(cache).filter(
+    ([, entry]) => entry?.expiresAt > now
+  );
+  const nextCache = Object.fromEntries(liveEntries);
+  const pageKey = buildTranslationCacheKey({
+    pageUrl,
+    sourceLanguage,
+    targetLanguage,
+    sourceText
+  });
+  const globalKey = buildTranslationCacheKey({
+    sourceLanguage,
+    targetLanguage,
+    sourceText
+  });
+
+  nextCache[pageKey] = {
+    expiresAt: now + PAGE_TRANSLATION_CACHE_TTL_MS,
+    results
+  };
+  nextCache[globalKey] = {
+    expiresAt: now + GLOBAL_TRANSLATION_CACHE_TTL_MS,
+    results
+  };
+
+  const trimmedCache = Object.fromEntries(
+    Object.entries(nextCache)
+      .sort(([, left], [, right]) => right.expiresAt - left.expiresAt)
+      .slice(0, MAX_TRANSLATION_CACHE_ITEMS)
+  );
+
+  await chrome.storage.local.set({
+    [TRANSLATION_CACHE_STORAGE_KEY]: trimmedCache
+  });
+}
+
+async function readTranslationCache() {
+  const stored = await chrome.storage.local.get([
+    TRANSLATION_CACHE_STORAGE_KEY
+  ]);
+  const cache = stored[TRANSLATION_CACHE_STORAGE_KEY];
+
+  return cache && typeof cache === "object" && !Array.isArray(cache)
+    ? cache
+    : {};
+}
+
+function buildTranslationCacheKey({
+  pageUrl,
+  sourceLanguage,
+  targetLanguage,
+  sourceText
+}) {
+  return JSON.stringify(
+    typeof pageUrl === "string"
+      ? [pageUrl, sourceLanguage, targetLanguage, sourceText]
+      : [sourceLanguage, targetLanguage, sourceText]
+  );
+}
+
+function normalizeCacheLanguage(language) {
+  return String(language || "AUTO").trim().toUpperCase() || "AUTO";
 }
 
 async function storeTranslationRun(lastTranslationRun) {
