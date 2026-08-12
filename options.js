@@ -200,32 +200,47 @@ function renderHistory(history) {
 
   for (const entry of history) {
     const item = document.createElement("article");
-    const title = document.createElement("p");
+    const header = document.createElement("header");
+    const title = document.createElement("span");
+    const details = document.createElement("div");
     const link = document.createElement("a");
-    const meta = document.createElement("p");
+    const date = document.createElement("span");
+    const language = document.createElement("span");
     const source = document.createElement("p");
     const results = document.createElement("div");
 
     item.className = "history-item";
+    header.className = "history-header";
     title.className = "history-title";
+    details.className = "history-details";
     link.className = "history-link";
-    meta.className = "history-meta";
+    date.className = "history-meta";
+    language.className = "history-language";
     source.className = "history-source";
     results.className = "history-results";
 
     title.textContent = entry.pageTitle || "Untitled page";
     link.href = entry.pageUrl || "#";
-    link.textContent = entry.pageUrl || "No page URL";
+    link.textContent = formatDomain(entry.pageUrl);
     link.target = "_blank";
     link.rel = "noreferrer";
-    meta.textContent = formatDate(entry.createdAt);
-    source.textContent = `Selected text: ${entry.sourceText || "Unavailable"}`;
+    date.textContent = formatDate(entry.createdAt);
+    language.textContent = formatLanguageDirection(entry);
+    source.textContent = entry.sourceText || "Unavailable";
+
+    if (!entry.pageUrl) {
+      link.removeAttribute("href");
+      link.removeAttribute("target");
+    }
+
+    details.append(link, date, language);
+    header.append(title, details);
 
     for (const result of entry.results || []) {
       results.append(renderHistoryResult(result));
     }
 
-    item.append(title, link, meta, source, results);
+    item.append(header, source, results);
     historyList.append(item);
   }
 }
@@ -233,22 +248,46 @@ function renderHistory(history) {
 function renderHistoryResult(result) {
   const card = document.createElement("section");
   const title = document.createElement("p");
+  const badge = document.createElement("span");
   const text = document.createElement("p");
-  const meta = document.createElement("p");
 
   card.className = `history-result${result.ok ? "" : " is-error"}`;
   title.className = "history-result-title";
+  badge.className = "cache-badge";
   text.className = "history-result-text";
-  meta.className = "history-result-meta";
 
   title.textContent = providerLabels[result.provider] || result.provider;
+  badge.textContent = "Cached";
   text.textContent = result.ok ? result.translatedText : result.error;
-  meta.textContent = result.ok
-    ? `From ${result.detectedSourceLanguage || "auto"} to ${result.targetLanguage}`
-    : "Provider request failed.";
 
-  card.append(title, text, meta);
+  if (result.cached) {
+    title.append(" ", badge);
+  }
+
+  card.append(title, text);
   return card;
+}
+
+function formatDomain(pageUrl) {
+  if (!pageUrl) {
+    return "No page URL";
+  }
+
+  try {
+    return new URL(pageUrl).hostname || pageUrl.replace(/^https?:\/\//, "");
+  } catch (_error) {
+    return pageUrl.replace(/^https?:\/\//, "").split("/")[0];
+  }
+}
+
+function formatLanguageDirection(entry) {
+  const successfulResult = (entry.results || []).find((result) => result.ok);
+  const sourceLanguage = successfulResult?.detectedSourceLanguage || "auto";
+  const targetLanguage = successfulResult?.targetLanguage || entry.targetLanguage;
+
+  return targetLanguage
+    ? `${sourceLanguage.toUpperCase()} → ${targetLanguage.toUpperCase()}`
+    : "Language unavailable";
 }
 
 function formatDate(timestamp) {

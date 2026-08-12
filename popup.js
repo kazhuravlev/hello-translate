@@ -49,14 +49,23 @@ autoTranslateToggle.addEventListener("change", async () => {
   });
 });
 
-loadSettings().catch(() => {
+initializePopup().catch(() => {
   targetLanguage.textContent = "ENGLISH (AMERICAN)";
   providerStatus.textContent = "UNAVAILABLE";
 });
 
-runTranslation().catch(() => {
-  providerStatus.textContent = "UNAVAILABLE";
-});
+async function initializePopup() {
+  const { intent = "default" } = await chrome.runtime.sendMessage({
+    type: "CONSUME_POPUP_INTENT"
+  });
+
+  if (intent === "field-translation") {
+    await loadSettings();
+    return;
+  }
+
+  await runTranslation();
+}
 
 function renderLastTranslation(lastTranslationRun) {
   results.replaceChildren();
@@ -72,19 +81,26 @@ function renderLastTranslation(lastTranslationRun) {
   for (const result of lastTranslationRun.results || []) {
     const card = document.createElement("article");
     const title = document.createElement("p");
+    const badge = document.createElement("span");
     const text = document.createElement("p");
     const meta = document.createElement("p");
 
     card.className = `result-card${result.ok ? "" : " is-error"}`;
     title.className = "result-title";
+    badge.className = "cache-badge";
     text.className = "result-text";
     meta.className = "result-meta";
 
     title.textContent = providerLabels[result.provider] || result.provider;
+    badge.textContent = "Cached";
     text.textContent = result.ok ? result.translatedText : result.error;
     meta.textContent = result.ok
       ? `From ${result.detectedSourceLanguage || "auto"} to ${result.targetLanguage}`
       : "Provider request failed.";
+
+    if (result.cached) {
+      title.append(" ", badge);
+    }
 
     card.append(title, text, meta);
     results.append(card);

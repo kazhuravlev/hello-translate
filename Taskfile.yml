@@ -14,29 +14,57 @@ vars:
 tasks:
   default:
     cmds:
-      - task: package
+      - task: local
+
+  local:
+    desc: Rebuild the unpacked extension for local Chrome use
+    vars:
+      LOCAL_DIR: "{{.DIST_DIR}}/{{.EXT_NAME}}-local"
+    cmds:
+      - task: validate
+      - rm -rf {{.LOCAL_DIR}}
+      - mkdir -p {{.LOCAL_DIR}}
+      - cp manifest.json background.js content.js popup.html popup.css popup.js options.html options.css options.js {{.LOCAL_DIR}}/
+      - cp -R icons {{.LOCAL_DIR}}/icons
+      - echo "Ready. Load dist/hello-translate-local via chrome://extensions -> Load unpacked."
+
+  publish:
+    desc: Build and publish the git-tagged release in Chrome Web Store
+    vars:
+      TAG_VERSION:
+        sh: git describe --tags --exact-match HEAD | sed 's/^v//'
+    preconditions:
+      - sh: printf "%s" "{{.TAG_VERSION}}" | grep -Eq '^[0-9]+(\.[0-9]+){1,3}$'
+        msg: HEAD must have a version tag such as v0.1.0.
+      - sh: test -n "{{.PUBLISHER_ID}}"
+        msg: Set CHROME_PUBLISHER_ID.
+      - sh: test -n "{{.EXTENSION_ID}}"
+        msg: Set CHROME_EXTENSION_ID.
+      - sh: test -n "{{.ACCESS_TOKEN}}"
+        msg: Set CHROME_WEBSTORE_TOKEN.
+    cmds:
+      - task: webstore-deploy-release
+        vars:
+          RELEASE_VERSION: "{{.TAG_VERSION}}"
 
   validate:
-    desc: Validate manifest JSON and required packaging files
     cmds:
+      - node --check background.js
+      - node --check content.js
+      - node --check popup.js
+      - node --check options.js
       - node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
       - test -f icons/icon-16.png
       - test -f icons/icon-32.png
       - test -f icons/icon-64.png
       - test -f icons/icon-128.png
 
-  clean:
-    desc: Remove packaged artifacts
-    cmds:
-      - rm -rf {{.DIST_DIR}}
-
   set-version:
-    desc: Rewrite manifest.json version for a tagged release
     preconditions:
       - sh: test -n "{{.RELEASE_VERSION}}"
-        msg: Set RELEASE_VERSION, for example RELEASE_VERSION=0.3.1.
+        msg: RELEASE_VERSION is required.
       - sh: printf "%s" "{{.RELEASE_VERSION}}" | grep -Eq '^[0-9]+(\.[0-9]+){1,3}$'
-        msg: RELEASE_VERSION must be a Chrome-compatible dotted numeric version.
+        msg: RELEASE_VERSION must be a Chrome-compatible dotted version.
     cmds:
       - >
         node -e "const fs=require('fs');
@@ -46,43 +74,23 @@ tasks:
         fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');"
 
   package:
-    desc: Build a Chrome Web Store upload zip
-    deps: [validate]
     cmds:
+      - task: validate
       - mkdir -p {{.DIST_DIR}}
       - rm -f {{.PACKAGE_FILE}}
       - zip -r {{.PACKAGE_FILE}} manifest.json background.js content.js popup.html popup.css popup.js options.html options.css options.js icons
 
   package-release:
-    desc: Rewrite manifest version from RELEASE_VERSION and build a release zip
     cmds:
       - task: set-version
         vars:
           RELEASE_VERSION: "{{.RELEASE_VERSION}}"
       - task: package
-
-  webstore-upload:
-    desc: Upload the current package to the Chrome Web Store draft
-    deps: [package]
-    preconditions:
-      - sh: test -n "{{.PUBLISHER_ID}}"
-        msg: Set CHROME_PUBLISHER_ID to your Chrome Web Store publisher id.
-      - sh: test -n "{{.EXTENSION_ID}}"
-        msg: Set CHROME_EXTENSION_ID to your published extension id.
-      - sh: test -n "{{.ACCESS_TOKEN}}"
-        msg: Set CHROME_WEBSTORE_TOKEN to an OAuth or service account access token.
-    cmds:
-      - task: webstore-upload-existing
+        vars:
+          PACKAGE_FILE: "{{.DIST_DIR}}/{{.EXT_NAME}}-{{.RELEASE_VERSION}}.zip"
 
   webstore-upload-existing:
-    desc: Upload an already packaged zip to the Chrome Web Store draft
     preconditions:
-      - sh: test -n "{{.PUBLISHER_ID}}"
-        msg: Set CHROME_PUBLISHER_ID to your Chrome Web Store publisher id.
-      - sh: test -n "{{.EXTENSION_ID}}"
-        msg: Set CHROME_EXTENSION_ID to your published extension id.
-      - sh: test -n "{{.ACCESS_TOKEN}}"
-        msg: Set CHROME_WEBSTORE_TOKEN to an OAuth or service account access token.
       - sh: test -f "{{.PACKAGE_FILE}}"
         msg: Package file {{.PACKAGE_FILE}} does not exist.
     cmds:
@@ -95,14 +103,6 @@ tasks:
         "https://chromewebstore.googleapis.com/upload/v2/publishers/{{.PUBLISHER_ID}}/items/{{.EXTENSION_ID}}:upload"
 
   webstore-publish:
-    desc: Publish the uploaded draft to the Chrome Web Store
-    preconditions:
-      - sh: test -n "{{.PUBLISHER_ID}}"
-        msg: Set CHROME_PUBLISHER_ID to your Chrome Web Store publisher id.
-      - sh: test -n "{{.EXTENSION_ID}}"
-        msg: Set CHROME_EXTENSION_ID to your published extension id.
-      - sh: test -n "{{.ACCESS_TOKEN}}"
-        msg: Set CHROME_WEBSTORE_TOKEN to an OAuth or service account access token.
     cmds:
       - >
         curl --fail-with-body
@@ -110,18 +110,12 @@ tasks:
         -X POST
         "https://chromewebstore.googleapis.com/v2/publishers/{{.PUBLISHER_ID}}/items/{{.EXTENSION_ID}}:publish"
 
-  webstore-deploy:
-    desc: Package, upload, and publish in one step
-    cmds:
-      - task: webstore-upload
-      - task: webstore-publish
-
   webstore-deploy-release:
-    desc: Rewrite manifest version, package once, upload, and publish
     cmds:
-      - task: set-version
+      - task: package-release
         vars:
           RELEASE_VERSION: "{{.RELEASE_VERSION}}"
-      - task: package
       - task: webstore-upload-existing
+        vars:
+          PACKAGE_FILE: "{{.DIST_DIR}}/{{.EXT_NAME}}-{{.RELEASE_VERSION}}.zip"
       - task: webstore-publish

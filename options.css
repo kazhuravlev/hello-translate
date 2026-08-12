@@ -1,9 +1,11 @@
 * {
   box-sizing: border-box;
+  min-width: 0;
 }
 
 body {
   margin: 0;
+  overflow-x: hidden;
   min-height: 100vh;
   font-family: Arial, sans-serif;
   background:
@@ -13,9 +15,12 @@ body {
 }
 
 .settings {
+  width: 100%;
   max-width: 720px;
-  margin: 0 auto;
+  margin: 0;
   padding: 48px 20px 64px;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .eyebrow {
@@ -64,7 +69,8 @@ h2 {
 .panel-head {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
@@ -150,8 +156,8 @@ button:hover {
 
 .history-list {
   display: grid;
-  gap: 14px;
-  margin-top: 20px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .history-empty {
@@ -164,26 +170,47 @@ button:hover {
 }
 
 .history-item {
-  padding: 18px;
-  border-radius: 18px;
+  padding: 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(251, 191, 36, 0.24);
 }
 
+.history-header {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+}
+
 .history-title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #111827;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 10px;
+  font-weight: 400;
+  color: #6b7280;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-details {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
+  gap: 7px;
+  font-size: 10px;
+  color: #6b7280;
 }
 
 .history-link {
-  display: inline-block;
-  margin-top: 6px;
-  font-size: 13px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   color: #9a3412;
   text-decoration: none;
-  word-break: break-all;
 }
 
 .history-link:hover {
@@ -191,26 +218,33 @@ button:hover {
 }
 
 .history-meta {
-  margin: 10px 0 0;
-  font-size: 12px;
-  color: #6b7280;
+  margin: 0;
+}
+
+.history-language {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(120, 53, 15, 0.08);
+  color: #7c2d12;
+  font-weight: 700;
 }
 
 .history-source {
-  margin: 14px 0 0;
-  font-size: 14px;
-  line-height: 1.6;
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .history-results {
   display: grid;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 5px;
+  margin-top: 7px;
 }
 
 .history-result {
-  padding: 12px;
-  border-radius: 14px;
+  padding: 7px 8px;
+  border-radius: 8px;
   background: #fff7ed;
 }
 
@@ -219,25 +253,31 @@ button:hover {
 }
 
 .history-result-title {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 3px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #9a3412;
 }
 
-.history-result-text {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #111827;
+.cache-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fed7aa;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: #7c2d12;
+  vertical-align: 1px;
 }
 
-.history-result-meta {
-  margin: 8px 0 0;
+.history-result-text {
+  margin: 0;
   font-size: 12px;
-  color: #6b7280;
+  line-height: 1.35;
+  color: #111827;
+  overflow-wrap: anywhere;
 }
 
 .attribution {
@@ -265,4 +305,25 @@ button:hover {
   margin: 16px 0 0;
   font-size: 14px;
   color: #7c2d12;
+}
+
+@media (max-width: 480px) {
+  .settings {
+    padding: 24px 10px 40px;
+  }
+
+  h1 {
+    font-size: 32px;
+  }
+
+  .panel {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .panel-head {
+    flex-direction: column;
+    gap: 8px;
+  }
 }

@@ -8,7 +8,8 @@ It now includes a settings page for a translation hotkey and target language.
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Click **Load unpacked**.
-4. Select this folder: `/Users/ka/p/personal/chrome-translate`
+4. Run `task local` after every source change.
+5. Select the generated folder: `dist/hello-translate-local`.
 
 ## Files
 
@@ -21,6 +22,7 @@ It now includes a settings page for a translation hotkey and target language.
 ## Current configuration
 
 - Suggested macOS hotkey: `Command+Shift+9`
+- Translate focused text field on macOS: `Command+Shift+8`
 - Target languages: English (`en`) and Russian (`ru`)
 - Translation providers: Google Cloud Translation Basic v2 and DeepL v2
 - Shortcut customization page in Chrome: `chrome://extensions/shortcuts`
@@ -34,6 +36,8 @@ It now includes a settings page for a translation hotkey and target language.
 5. Every run is saved to local history with source text, provider results, page title, page URL, and timestamp.
 
 Optional mode: enable auto translate in settings to open the popup automatically after you finish a mouse selection. Translation starts only after the mouse button is released.
+
+To translate a form field in place, focus an editable text input or textarea and press `Command+Shift+8` (`Ctrl+Shift+8` on other platforms). The extension translates the complete field value, writes the first successful provider result back into the field, and opens the popup with the result or an error.
 
 If you reloaded the unpacked extension and test on a tab that was already open, refresh that page once first.
 

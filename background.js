@@ -5,7 +5,22 @@ const defaultSettings = {
   autoTranslateSelection: false
 };
 const MAX_HISTORY_ITEMS = 100;
+const TRANSLATION_CACHE_STORAGE_KEY = "translationCache";
+const PAGE_TRANSLATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const GLOBAL_TRANSLATION_CACHE_TTL_MS = 10 * 60 * 1000;
+const MAX_TRANSLATION_CACHE_ITEMS = 500;
 const recentAutoSelections = new Map();
+let pendingFieldTranslationPopup = false;
+
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== "translate_focused_field") {
+    return;
+  }
+
+  handleTranslateFocusedFieldCommand().catch((error) => {
+    console.error("Could not translate the focused text field.", error);
+  });
+});
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(
@@ -68,6 +83,15 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "CONSUME_POPUP_INTENT") {
+    const intent = pendingFieldTranslationPopup
+      ? "field-translation"
+      : "default";
+    pendingFieldTranslationPopup = false;
+    sendResponse({ intent });
+    return;
+  }
+
   if (message?.type === "RUN_TRANSLATION") {
     handleTranslateCommand()
       .then((result) => {
@@ -121,6 +145,117 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
+async function handleTranslateFocusedFieldCommand() {
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true
+  });
+  const windowId = tab?.windowId;
+
+  if (!tab?.id) {
+    await storeFieldTranslationError("No active tab found.");
+    await openFieldTranslationPopup(windowId);
+    return;
+  }
+
+  try {
+    const field = await sendMessageToTab(tab.id, {
+      type: "GET_FOCUSED_TEXT_FIELD"
+    });
+
+    if (!field?.ok) {
+      throw new Error(field?.message || "Focus an editable text field first.");
+    }
+
+    const {
+      targetLanguage: storedTargetLanguage = "EN-US",
+      enabledProviders = ["google"]
+    } = await chrome.storage.sync.get(["targetLanguage", "enabledProviders"]);
+    const { googleApiKey = "", deeplApiKey = "" } = await chrome.storage.local.get([
+      "googleApiKey",
+      "deeplApiKey"
+    ]);
+    const targetLanguage = normalizeTargetLanguage(storedTargetLanguage);
+    const results = await runEnabledProvidersWithCache({
+      enabledProviders,
+      targetLanguage,
+      text: field.value,
+      pageUrl: field.pageUrl,
+      contextText: buildTranslationContext({
+        pageTitle: field.pageTitle,
+        contextText: field.contextText
+      }),
+      sourceLanguageHint: normalizeSourceLanguageHint(field.pageLanguage),
+      googleApiKey,
+      deeplApiKey
+    });
+    const successfulResult = results.find((result) => result.ok);
+
+    if (!successfulResult) {
+      await storeTranslationRun({
+        mode: "field",
+        pageTitle: field.pageTitle,
+        pageUrl: field.pageUrl,
+        sourceText: field.value,
+        targetLanguage,
+        results
+      });
+      await openFieldTranslationPopup(windowId);
+      return;
+    }
+
+    const replacement = await sendMessageToTab(tab.id, {
+      type: "REPLACE_FOCUSED_TEXT_FIELD",
+      fieldToken: field.fieldToken,
+      translatedText: successfulResult.translatedText
+    });
+
+    if (!replacement?.ok) {
+      results.push({
+        provider: "extension",
+        ok: false,
+        error: replacement?.message || "Could not update the focused text field."
+      });
+    }
+
+    await storeTranslationRun({
+      mode: "field",
+      pageTitle: field.pageTitle,
+      pageUrl: field.pageUrl,
+      sourceText: field.value,
+      targetLanguage,
+      results
+    });
+  } catch (error) {
+    await storeFieldTranslationError(error.message || "Field translation failed.");
+  }
+
+  await openFieldTranslationPopup(windowId);
+}
+
+async function storeFieldTranslationError(message) {
+  await storeTranslationRun({
+    mode: "field",
+    sourceText: "",
+    results: [{ provider: "extension", ok: false, error: message }]
+  });
+}
+
+async function openFieldTranslationPopup(windowId) {
+  pendingFieldTranslationPopup = true;
+
+  try {
+    if (typeof windowId === "number") {
+      await chrome.action.openPopup({ windowId });
+    } else {
+      await chrome.action.openPopup();
+    }
+  } catch (error) {
+    pendingFieldTranslationPopup = false;
+    console.warn("Could not open the translation popup.", error);
+  }
+}
+
 async function handleTranslateCommand() {
   const [tab] = await chrome.tabs.query({
     active: true,
@@ -170,10 +305,11 @@ async function handleTranslateCommand() {
     ]);
     const targetLanguage = normalizeTargetLanguage(storedTargetLanguage);
 
-    const results = await runEnabledProviders({
+    const results = await runEnabledProvidersWithCache({
       enabledProviders,
       targetLanguage,
       text: selectedText,
+      pageUrl,
       contextText: buildTranslationContext({
         pageTitle,
         contextText
@@ -421,6 +557,143 @@ async function runEnabledProviders({
   return Promise.all(tasks);
 }
 
+async function runEnabledProvidersWithCache(options) {
+  const sourceLanguage = normalizeCacheLanguage(
+    options.sourceLanguageHint || "AUTO"
+  );
+  const targetLanguage = normalizeCacheLanguage(options.targetLanguage);
+  const cachedResults = await getCachedTranslation({
+    pageUrl: options.pageUrl,
+    sourceLanguage,
+    targetLanguage,
+    sourceText: options.text
+  });
+
+  if (cachedResults) {
+    return cachedResults.map((result) => ({
+      ...result,
+      cached: true
+    }));
+  }
+
+  const results = await runEnabledProviders(options);
+
+  if (results.length && results.every((result) => result.ok)) {
+    await storeCachedTranslation({
+      pageUrl: options.pageUrl,
+      sourceLanguage,
+      targetLanguage,
+      sourceText: options.text,
+      results
+    });
+  }
+
+  return results;
+}
+
+async function getCachedTranslation({
+  pageUrl,
+  sourceLanguage,
+  targetLanguage,
+  sourceText
+}) {
+  const now = Date.now();
+  const cache = await readTranslationCache();
+  const pageKey = buildTranslationCacheKey({
+    pageUrl,
+    sourceLanguage,
+    targetLanguage,
+    sourceText
+  });
+  const globalKey = buildTranslationCacheKey({
+    sourceLanguage,
+    targetLanguage,
+    sourceText
+  });
+  const entry = [pageKey, globalKey]
+    .map((key) => cache[key])
+    .find((candidate) => candidate?.expiresAt > now);
+
+  if (!entry) {
+    return null;
+  }
+
+  return structuredClone(entry.results);
+}
+
+async function storeCachedTranslation({
+  pageUrl,
+  sourceLanguage,
+  targetLanguage,
+  sourceText,
+  results
+}) {
+  const now = Date.now();
+  const cache = await readTranslationCache();
+  const liveEntries = Object.entries(cache).filter(
+    ([, entry]) => entry?.expiresAt > now
+  );
+  const nextCache = Object.fromEntries(liveEntries);
+  const pageKey = buildTranslationCacheKey({
+    pageUrl,
+    sourceLanguage,
+    targetLanguage,
+    sourceText
+  });
+  const globalKey = buildTranslationCacheKey({
+    sourceLanguage,
+    targetLanguage,
+    sourceText
+  });
+
+  nextCache[pageKey] = {
+    expiresAt: now + PAGE_TRANSLATION_CACHE_TTL_MS,
+    results
+  };
+  nextCache[globalKey] = {
+    expiresAt: now + GLOBAL_TRANSLATION_CACHE_TTL_MS,
+    results
+  };
+
+  const trimmedCache = Object.fromEntries(
+    Object.entries(nextCache)
+      .sort(([, left], [, right]) => right.expiresAt - left.expiresAt)
+      .slice(0, MAX_TRANSLATION_CACHE_ITEMS)
+  );
+
+  await chrome.storage.local.set({
+    [TRANSLATION_CACHE_STORAGE_KEY]: trimmedCache
+  });
+}
+
+async function readTranslationCache() {
+  const stored = await chrome.storage.local.get([
+    TRANSLATION_CACHE_STORAGE_KEY
+  ]);
+  const cache = stored[TRANSLATION_CACHE_STORAGE_KEY];
+
+  return cache && typeof cache === "object" && !Array.isArray(cache)
+    ? cache
+    : {};
+}
+
+function buildTranslationCacheKey({
+  pageUrl,
+  sourceLanguage,
+  targetLanguage,
+  sourceText
+}) {
+  return JSON.stringify(
+    typeof pageUrl === "string"
+      ? [pageUrl, sourceLanguage, targetLanguage, sourceText]
+      : [sourceLanguage, targetLanguage, sourceText]
+  );
+}
+
+function normalizeCacheLanguage(language) {
+  return String(language || "AUTO").trim().toUpperCase() || "AUTO";
+}
+
 async function storeTranslationRun(lastTranslationRun) {
   const persistedRun = {
     ...lastTranslationRun,
@@ -441,10 +714,14 @@ async function storeTranslationRun(lastTranslationRun) {
 }
 
 async function getSelectedTextFromTab(tabId) {
+  return sendMessageToTab(tabId, {
+    type: "GET_SELECTION_TEXT"
+  });
+}
+
+async function sendMessageToTab(tabId, message) {
   try {
-    return await chrome.tabs.sendMessage(tabId, {
-      type: "GET_SELECTION_TEXT"
-    });
+    return await chrome.tabs.sendMessage(tabId, message);
   } catch (error) {
     const noReceiver =
       chrome.runtime.lastError?.message ||

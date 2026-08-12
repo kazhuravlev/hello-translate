@@ -10,7 +10,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       pageUrl: window.location.href || ""
     });
   }
+
+  if (message?.type === "GET_FOCUSED_TEXT_FIELD") {
+    sendResponse(getFocusedTextFieldPayload());
+  }
+
+  if (message?.type === "REPLACE_FOCUSED_TEXT_FIELD") {
+    sendResponse(replaceFocusedTextFieldValue(message));
+  }
 });
+
+let pendingTextField = null;
+let pendingTextFieldToken = "";
 
 document.addEventListener("mouseup", () => {
   window.setTimeout(() => {
@@ -54,8 +65,119 @@ function isTextField(element) {
   return (
     element instanceof HTMLTextAreaElement ||
     (element instanceof HTMLInputElement &&
-      ["search", "text", "url", "tel", "password"].includes(element.type))
+      ["search", "text", "url", "tel"].includes(element.type))
   );
+}
+
+function getFocusedTextFieldPayload() {
+  const activeElement = getDeepActiveElement();
+
+  if (!isTranslatableTextField(activeElement)) {
+    pendingTextField = null;
+    pendingTextFieldToken = "";
+    return {
+      ok: false,
+      message: "Focus an editable text field first."
+    };
+  }
+
+  if (activeElement.disabled || activeElement.readOnly) {
+    return {
+      ok: false,
+      message: "The focused text field is not editable."
+    };
+  }
+
+  if (!activeElement.value.trim()) {
+    return {
+      ok: false,
+      message: "The focused text field is empty."
+    };
+  }
+
+  pendingTextField = activeElement;
+  pendingTextFieldToken = crypto.randomUUID();
+
+  return {
+    ok: true,
+    fieldToken: pendingTextFieldToken,
+    value: activeElement.value,
+    contextText: normalizeContext(activeElement.value),
+    pageLanguage: document.documentElement.lang || "",
+    pageTitle: document.title || "",
+    pageUrl: window.location.href || ""
+  };
+}
+
+function replaceFocusedTextFieldValue({ fieldToken, translatedText }) {
+  if (
+    !pendingTextField ||
+    !pendingTextField.isConnected ||
+    fieldToken !== pendingTextFieldToken ||
+    getDeepActiveElement() !== pendingTextField
+  ) {
+    return {
+      ok: false,
+      message: "The focused text field is no longer available."
+    };
+  }
+
+  if (pendingTextField.disabled || pendingTextField.readOnly) {
+    return {
+      ok: false,
+      message: "The focused text field is no longer editable."
+    };
+  }
+
+  if (typeof translatedText !== "string" || !translatedText) {
+    return {
+      ok: false,
+      message: "The translation service returned no replacement text."
+    };
+  }
+
+  const field = pendingTextField;
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    field instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype,
+    "value"
+  )?.set;
+
+  if (!valueSetter) {
+    return {
+      ok: false,
+      message: "Could not update the focused text field."
+    };
+  }
+
+  valueSetter.call(field, translatedText);
+  field.dispatchEvent(new InputEvent("input", {
+    bubbles: true,
+    inputType: "insertReplacementText",
+    data: translatedText
+  }));
+  field.dispatchEvent(new Event("change", { bubbles: true }));
+  field.focus();
+  field.setSelectionRange(translatedText.length, translatedText.length);
+  pendingTextField = null;
+  pendingTextFieldToken = "";
+
+  return { ok: true };
+}
+
+function getDeepActiveElement() {
+  let activeElement = document.activeElement;
+
+  while (activeElement?.shadowRoot?.activeElement) {
+    activeElement = activeElement.shadowRoot.activeElement;
+  }
+
+  return activeElement;
+}
+
+function isTranslatableTextField(element) {
+  return isTextField(element);
 }
 
 function buildTextFieldContext(value, selectionStart, selectionEnd) {
