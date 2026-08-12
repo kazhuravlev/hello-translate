@@ -8,7 +8,8 @@ It now includes a settings page for a translation hotkey and target language.
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Click **Load unpacked**.
-4. Select this folder: `/Users/ka/p/personal/chrome-translate`
+4. Run `task local` after every source change.
+5. Select the generated folder: `dist/hello-translate-local`.
 
 ## Files
 
