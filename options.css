@@ -227,6 +227,17 @@ button:hover {
   color: #9a3412;
 }
 
+.cache-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fed7aa;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: #7c2d12;
+  vertical-align: 1px;
+}
+
 .history-result-text {
   margin: 0;
   font-size: 14px;

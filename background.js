@@ -570,7 +570,10 @@ async function runEnabledProvidersWithCache(options) {
   });
 
   if (cachedResults) {
-    return cachedResults;
+    return cachedResults.map((result) => ({
+      ...result,
+      cached: true
+    }));
   }
 
   const results = await runEnabledProviders(options);

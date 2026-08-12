@@ -81,19 +81,26 @@ function renderLastTranslation(lastTranslationRun) {
   for (const result of lastTranslationRun.results || []) {
     const card = document.createElement("article");
     const title = document.createElement("p");
+    const badge = document.createElement("span");
     const text = document.createElement("p");
     const meta = document.createElement("p");
 
     card.className = `result-card${result.ok ? "" : " is-error"}`;
     title.className = "result-title";
+    badge.className = "cache-badge";
     text.className = "result-text";
     meta.className = "result-meta";
 
     title.textContent = providerLabels[result.provider] || result.provider;
+    badge.textContent = "Cached";
     text.textContent = result.ok ? result.translatedText : result.error;
     meta.textContent = result.ok
       ? `From ${result.detectedSourceLanguage || "auto"} to ${result.targetLanguage}`
       : "Provider request failed.";
+
+    if (result.cached) {
+      title.append(" ", badge);
+    }
 
     card.append(title, text, meta);
     results.append(card);

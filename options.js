@@ -233,19 +233,26 @@ function renderHistory(history) {
 function renderHistoryResult(result) {
   const card = document.createElement("section");
   const title = document.createElement("p");
+  const badge = document.createElement("span");
   const text = document.createElement("p");
   const meta = document.createElement("p");
 
   card.className = `history-result${result.ok ? "" : " is-error"}`;
   title.className = "history-result-title";
+  badge.className = "cache-badge";
   text.className = "history-result-text";
   meta.className = "history-result-meta";
 
   title.textContent = providerLabels[result.provider] || result.provider;
+  badge.textContent = "Cached";
   text.textContent = result.ok ? result.translatedText : result.error;
   meta.textContent = result.ok
     ? `From ${result.detectedSourceLanguage || "auto"} to ${result.targetLanguage}`
     : "Provider request failed.";
+
+  if (result.cached) {
+    title.append(" ", badge);
+  }
 
   card.append(title, text, meta);
   return card;
